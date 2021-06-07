@@ -1,0 +1,277 @@
+"""
+Dati enter dupa fiecare solutie afisata.
+
+"""
+import copy
+import optparse
+import sys
+import os
+import time
+import numpy
+
+
+# informatii despre un nod din arborele de parcurgere (nu din graful initial)
+class NodParcurgere:
+    def __init__(self, info, parinte, cost=0, h=0):
+        self.info = info
+        self.parinte = parinte  # parintele din arborele de parcurgere
+        self.g = cost  # consider cost=1 pentru o mutare
+        self.h = h
+        self.f = self.g + self.h
+
+    def obtineDrum(self):
+        l = [self]
+        nod = self
+        while nod.parinte is not None:
+            l.insert(0, nod.parinte)
+            nod = nod.parinte
+        return l
+
+    def afisDrum(self, afisCost=False, afisLung=False):  # returneaza si lungimea drumului
+        l = self.obtineDrum()
+        for nod in l:
+            print(str(nod))
+        if afisCost:
+            print("Cost: ", self.g)
+        if afisCost:
+            print("Lungime: ", len(l))
+        return len(l)
+
+    def contineInDrum(self, infoNodNou):
+        nodDrum = self
+        while nodDrum is not None:
+            if (infoNodNou == nodDrum.info):
+                return True
+            nodDrum = nodDrum.parinte
+
+        return False
+
+    def __repr__(self):
+        sir = ""
+        for linie in self.info:
+            sir += " ".join(linie) + "\n"
+        return sir
+
+    # euristica banală: daca nu e stare scop, returnez 1, altfel 0
+
+    def __str__(self):
+        sir = ""
+        for linie in self.info:
+            sir += " ".join(linie) + "\n"
+        return sir
+
+
+def cautaElemMatr(matr, elem):
+    for i in range(len(matr)):
+        for j in range(len(matr[i])):
+            if matr[i][j] == elem:
+                return i, j
+
+
+class Graph:  # graful problemei
+    def __init__(self, nume_fisier):
+
+        f = open(nume_fisier, "r")
+        continutfisier = f.read()
+        listaLinii = continutfisier.split("\n")
+        self.start = []
+        for sirLinie in listaLinii:
+            self.start.append(sirLinie.split())
+
+
+        print(self.start)
+
+
+    def nuAreSolutii(self, infoNod):
+        listaPiese = []
+        for linie in infoNod:
+            listaPiese.extend(linie)
+        nrInversiuni = 0
+        for i in range(len(listaPiese)):
+            if listaPiese[i] == '0':
+                continue
+            for j in range(i + 1, len(listaPiese)):
+                if listaPiese[j] == '0':
+                    continue
+                if listaPiese[j] < listaPiese[i]:
+                    nrInversiuni += 1
+
+        if nrInversiuni % 2 == 1:
+            return True
+        return False
+
+    def testeaza_scop(self, nodCurent):
+        lista = []
+        lista2 = []
+        for i in range(0, len(nodCurent.info[0])):
+            for z in range(0, len(nodCurent.info[0])//2):
+                lista.append(nodCurent.info[i][z])
+
+        for i in range(0, len(nodCurent.info[0])):
+            for z in range(len(nodCurent.info[0]) - 1, len(nodCurent.info[0])//2, -1):
+                lista2.append(nodCurent.info[i][z])
+
+            if lista == lista2:
+                return True
+        return False
+
+    # va genera succesorii sub forma de noduri in arborele de parcurgere
+
+    def genereazaSuccesori(self, nodCurent, tip_euristica="euristica banala"):
+        listaSuccesori = []
+
+        lGol, cGol = cautaElemMatr(nodCurent.info, '0')  #linie gol  coloana gol
+        # stanga, dreapta, sus, jos
+        directii = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]]
+        for dl, dc in directii:
+            contorPar = 0
+            contorImp = 0
+            lPlacuta = lGol + dl
+            cPlacuta = cGol + dc
+            if 0 <= lPlacuta < len(nodCurent.info[0]) and 0 <= cPlacuta < len(nodCurent.info[0]):
+                directii2 = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]]
+                for dl2, dc2 in directii2:
+                    try:
+                        if 0 <= int(nodCurent.info[dl2+lGol][dc2+cGol]) < len(nodCurent.info[0]) and int(nodCurent.info[dl2+lGol][dc2+cGol])%2 == 0:
+                            contorPar +=1
+                        elif  0 <= int(nodCurent.info[dl2+lGol][dc2+cGol]) < len(nodCurent.info[0]) and int(nodCurent.info[dl2+lGol][dc2+cGol])%2 != 0:
+                            contorImp +=1
+                    except Exception:
+                        pass
+
+                if (int(nodCurent.info[lPlacuta][cPlacuta])%2 == 0 and contorPar >= contorImp) or (contorPar <= contorImp and int(nodCurent.info[lPlacuta][cPlacuta])%2 != 0):
+                    copieInfo = copy.deepcopy(nodCurent.info)
+                    copieInfo[lGol][cGol] = copieInfo[lPlacuta][cPlacuta]
+                    copieInfo[lPlacuta][cPlacuta] = '0'
+                    if not nodCurent.contineInDrum(copieInfo):
+                        costArc = 1
+                        listaSuccesori.append(NodParcurgere(copieInfo, nodCurent, nodCurent.g + costArc,
+                                                            self.calculeaza_h(copieInfo, tip_euristica)))
+
+
+        return listaSuccesori
+
+    # euristica banala
+    def calculeaza_h(self, infoNod, tip_euristica="euristica banala"):
+        if tip_euristica == "euristica banala":
+            return 1
+        else:
+            hTotal = 0
+            for lPlacutaC in range(len(infoNod)):  # linia placutei curente
+                for cPlacutaC in range(len(infoNod[lPlacutaC])):  # coloana placutei curente
+                    if infoNod[lPlacutaC][cPlacutaC] != 0:
+
+                        placuta = int(infoNod[lPlacutaC][cPlacutaC])
+                    directii3 = [[0, -1], [0, 1], [-1, 0], [1, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]]
+
+                    # linia si coloana placutei in starea finala
+                    lPlacutaF = (placuta - 1) // len(infoNod[0])
+                    cPlacutaF = (placuta - 1) % len(infoNod[0])
+                    hTotal += abs(lPlacutaF - lPlacutaC) + abs(cPlacutaF - cPlacutaC)
+            return hTotal
+
+    def __repr__(self):
+        sir = ""
+        for (k, v) in self.__dict__.items():
+            sir += "{} = {}\n".format(k, v)
+        return (sir)
+
+
+def breadth_first(gr, nrSolutiiCautate):
+    # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
+    c = [NodParcurgere(gr.start, None)]
+
+    while len(c) > 0:
+        # print("Coada actuala: " + str(c))
+        # input()
+        nodCurent = c.pop(0)
+
+        if gr.testeaza_scop(nodCurent):
+            print("Solutie:")
+            nodCurent.afisDrum(afisCost=True, afisLung=True)
+            print("\n----------------\n")
+            input()
+            nrSolutiiCautate -= 1
+            if nrSolutiiCautate == 0:
+                return
+        lSuccesori = gr.genereazaSuccesori(nodCurent)
+        c.extend(lSuccesori)
+
+
+def uniform_cost(gr, nrSolutiiCautate=1):
+    # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
+    c = [NodParcurgere(gr.start, None, 0, gr.calculeaza_h(gr.start))]
+
+    while len(c) > 0:
+        # print("Coada actuala: " + str(c))
+        # input()
+        nodCurent = c.pop(0)
+
+        if gr.testeaza_scop(nodCurent):
+            print("Solutie: ")
+            nodCurent.afisDrum(afisCost=True, afisLung=True)
+            print("\n----------------\n")
+            nrSolutiiCautate -= 1
+            if nrSolutiiCautate == 0:
+                return
+        lSuccesori = gr.genereazaSuccesori(nodCurent)
+        for s in lSuccesori:
+            i = 0
+            gasit_loc = False
+            for i in range(len(c)):
+                # ordonez dupa cost(notat cu g aici și în desenele de pe site)
+                if c[i].g > s.g:
+                    gasit_loc = True
+                    break
+            if gasit_loc:
+                c.insert(i, s)
+            else:
+                c.append(s)
+
+
+
+def a_star(gr, nrSolutiiCautate, tip_euristica):
+    # in coada vom avea doar noduri de tip NodParcurgere (nodurile din arborele de parcurgere)
+    c = [NodParcurgere(gr.start, None, 0, gr.calculeaza_h(gr.start))]
+    if gr.nuAreSolutii(gr.start):
+        print("Nu are solutii!")
+        return
+    while len(c) > 0:
+        nodCurent = c.pop(0)
+
+        if gr.testeaza_scop(nodCurent):
+            print("Solutie: ")
+            nodCurent.afisDrum(afisCost=True, afisLung=True)
+            print("\n----------------\n")
+            input()
+            nrSolutiiCautate -= 1
+            if nrSolutiiCautate == 0:
+                return
+        lSuccesori = gr.genereazaSuccesori(nodCurent, tip_euristica=tip_euristica)
+        for s in lSuccesori:
+            i = 0
+            gasit_loc = False
+            for i in range(len(c)):
+                # diferenta fata de UCS e ca ordonez dupa f
+                if c[i].f >= s.f:
+                    gasit_loc = True
+                    break;
+            if gasit_loc:
+                c.insert(i, s)
+            else:
+                c.append(s)
+
+
+gr = Graph("input.txt")
+
+
+# Rezolvat cu breadth first
+# print("Solutii obtinute cu breadth first:")
+# breadth_first(gr, nrSolutiiCautate=3)
+
+print("\n\n##################\nSolutii obtinute cu UCS:")
+# print("\nObservatie: stivele sunt afisate pe orizontala, cu baza la stanga si varful la dreapta.")
+# uniform_cost(gr, nrSolutiiCautate=4)
+print("\n\n##################\nSolutii obtinute cu A*:")
+a_star(gr, nrSolutiiCautate=3, tip_euristica="euristica nebanala")
+
