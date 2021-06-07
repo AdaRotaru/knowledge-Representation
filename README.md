@@ -2,6 +2,9 @@
 
 
 1. Turn Based Game
+
+jocul are interfata grafica realizata cu pygame
+
 Jocul se desfasoara pe un grid NxM cu 10≥N,M≥5, macar unul dintre M, N trebuie sa fie par (utilizatorul va fi întrebat în legătură cu dimensiunea tablei).
 
 Un jucator foloseste simbolul x si celalalt 0 ( o sa ii numim pe scurt jucatorii x si 0)
